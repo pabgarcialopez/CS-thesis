@@ -7,7 +7,6 @@ from torch.utils.data import Dataset
 
 class NSynth(Dataset):
 
-    @chronometer
     def __init__(self, partition, transform=None):
         # Partition is a string: 'training', 'validation', or 'testing'
 
