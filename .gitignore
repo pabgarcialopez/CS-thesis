@@ -1,3 +1,4 @@
 .gitmodules
 wiki
 data
+__pycache__
