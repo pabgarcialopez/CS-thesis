@@ -1,13 +1,13 @@
-from config import BASE_PATH
 from utils.dataset_processing import *
 from utils.audio_plotting import *
+from utils.decorators import chronometer
 
-import io, json, zipfile, torchaudio
-from torch.utils.data import Dataset, DataLoader
-from torchaudio.transforms import MelSpectrogram
+import torchaudio
+from torch.utils.data import Dataset
 
 class NSynth(Dataset):
 
+    @chronometer
     def __init__(self, partition, transform=None):
         # Partition is a string: 'training', 'validation', or 'testing'
 
@@ -34,44 +34,9 @@ class NSynth(Dataset):
         # Wrap the bytes in a BytesIO object so torchaudio can read it
         waveform, sample_rate = torchaudio.load(wav_file, format="wav")
 
+        # waveform.shape = [num_channels, time] = [1, num_samples = 4 * 16000 = 64000]
+
         if self._transform:
             waveform = self._transform(waveform)
         
         return metadata, waveform, sample_rate
-    
-
-# Notes:
-
-# 1) The waveform returned by __getitem__ is a tensor of shape [num_channels, time]. In our case,
-#    we have mono audios, so num_channels = 1, and time "= num_samples" = 64000 (4 seconds * 16000 samples/second)
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Visualización de una onda de audio sin transformación, y su Mel-espectograma
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-# 1) Instancia del dataset crudo
-raw_dataset = NSynth('testing', transform=None)
-
-# 2) Instancia de la transformación MelSpectrogram
-mel_transform = MelSpectrogram(
-    sample_rate=16000,
-    n_fft=1024,
-    hop_length=512,
-    n_mels=64
-)
-
-# 3) Seleccionamos un índice para ver un ejemplo
-metadata, waveform, sample_rate = raw_dataset[0]  # ejemplo de índice 0
-# waveform.shape -> [1, num_samples], por ser mono
-print(waveform.shape)
-
-# 4) Plot waveform
-plot_waveform(waveform)
-
-# 5) Aplicar la transformación para obtener el espectrograma
-mel_spec = mel_transform(waveform)  # Returns [1, n_mels, time_frames]
-
-# A veces se aplica una conversión a dB para que se vea mejor:
-db_transform = torchaudio.transforms.AmplitudeToDB(stype="power")
-mel_spec_db = db_transform(mel_spec)
-plot_spectogram(mel_spec_db)

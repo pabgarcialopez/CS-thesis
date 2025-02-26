@@ -1,5 +1,5 @@
 import io, json, zipfile
-from config import BASE_PATH
+from config import DATA_PATH
 
 # ------------------------------------------------------------------------------
 # Hard-coded mappings for NSynth, based on the official specification.
@@ -64,7 +64,7 @@ def load_json(partition):
     """
     Returns the loaded json file examples.com from a specific dataset partition
     """
-    zip_path = BASE_PATH / 'data' / (partition + '.zip')
+    zip_path = DATA_PATH / (partition + '.zip')
     json_file_name = f'{partition}/examples.json'
     with zipfile.ZipFile(zip_path, 'r') as z:
         with z.open(json_file_name, 'r') as json_file:
@@ -75,7 +75,7 @@ def get_audio_file(audio_file_name, partition):
     """
     Returns the ready-to-use file to be used by `torchaudio.load(...)`
     """
-    zip_path = BASE_PATH / 'data' / (partition + '.zip')
+    zip_path = DATA_PATH / (partition + '.zip')
     with zipfile.ZipFile(zip_path, 'r') as z:
         with z.open(f"{partition}/audio/{audio_file_name}") as audio_file:
             return io.BytesIO(audio_file.read())
