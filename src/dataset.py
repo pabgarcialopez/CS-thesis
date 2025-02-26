@@ -21,11 +21,9 @@ class NSynth(Dataset):
         self._keys = list(self._metadata.keys())
 
     def __len__(self):
-        # Return the dataset's length
         return len(self._metadata)
 
     def __getitem__(self, index):
-        
         # Get the key corresponding to this index
         key = self._keys[index]
         metadata = self._metadata[key]

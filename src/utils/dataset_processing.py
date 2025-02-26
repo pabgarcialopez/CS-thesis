@@ -61,6 +61,9 @@ INSTRUMENTS_ID2STR = {}
 # ------------------------------------------------------------------------------
 
 def load_json(partition):
+    """
+    Returns the loaded json file examples.com from a specific dataset partition
+    """
     zip_path = BASE_PATH / 'data' / (partition + '.zip')
     json_file_name = f'{partition}/examples.json'
     with zipfile.ZipFile(zip_path, 'r') as z:
@@ -69,10 +72,13 @@ def load_json(partition):
                 return json.load(text_file)
             
 def get_audio_file(audio_file_name, partition):
+    """
+    Returns the ready-to-use file to be used by `torchaudio.load(...)`
+    """
     zip_path = BASE_PATH / 'data' / (partition + '.zip')
     with zipfile.ZipFile(zip_path, 'r') as z:
-        with z.open(f"{partition}/audio/{audio_file_name}") as wav_file:
-            return io.BytesIO(wav_file.read())
+        with z.open(f"{partition}/audio/{audio_file_name}") as audio_file:
+            return io.BytesIO(audio_file.read())
 
 def process_metadata(json_data):
     """
