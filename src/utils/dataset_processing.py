@@ -109,8 +109,6 @@ def process_metadata(json_data):
             for q_str in str_qualities:
                 if q_str in QUALITIES_STR2ID:
                     numeric_qualities.append(QUALITIES_STR2ID[q_str])
-            # You could store numeric_qualities somewhere, or rely on
-            # the existing 'qualities' field (a 10-element binary vector).
             del metadata["qualities_str"]
 
         # Build the instrument -> instrument_str map if needed

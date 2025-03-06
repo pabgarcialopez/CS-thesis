@@ -13,8 +13,8 @@ class NSynth(Dataset):
         self._partition = partition
         self._transform = transform
 
-        self._metadata = load_json(partition)
-        self._metadata = process_metadata(self._metadata)
+        json_data = load_json(partition)
+        self._metadata = process_metadata(json_data)
         
         # Keys are used by the getitem function
         self._keys = list(self._metadata.keys())
@@ -30,10 +30,8 @@ class NSynth(Dataset):
         # Get the audio file ready for torchaudio
         wav_file = get_audio_file(f"{key}.wav", self._partition)
     
-        # Wrap the bytes in a BytesIO object so torchaudio can read it
-        waveform, sample_rate = torchaudio.load(wav_file, format="wav")
-
         # waveform.shape = [num_channels, time] = [1, num_samples = 4 * 16000 = 64000]
+        waveform, sample_rate = torchaudio.load(wav_file, format="wav")
 
         if self._transform:
             waveform = self._transform(waveform)
