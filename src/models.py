@@ -2,38 +2,97 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .config import *
+from utils.models import *
+
 class AutoEncoder(nn.Module):
-    def __init__(self, input_channels, latent_dim):
+    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
         super().__init__()
-        # Define the encoder with Conv2d layers and linear layers
-        self.encoder = nn.Sequential(
-            # Example:
-            # nn.Conv2d(input_channels, 32, kernel_size=3, stride=2, padding=1),
-            # nn.ReLU(),
-            # ... more conv layers ...
-        )
-        # After conv layers, flatten and reduce to latent_dim
-        self.fc_enc = nn.Linear(some_flattened_size, latent_dim)
+
+        # ----------------
+        # Encoder setup
+        # ----------------
+
+        current_height = input_height
+        current_width = input_width
+
+        # Define encoder's architecture: (convolution -> activation -> pooling) -> linearity        
+        enc_layers = []
+        input_channels = in_channels
+        for output_channels in filters:
+            print(f"Input channels: {input_channels} and Output channels: {output_channels}")
+            enc_layers.append(nn.Conv2d(
+                input_channels, 
+                output_channels, 
+                kernel_size=CONV_KERNEL_SIZE, 
+                stride=CONV_STRIDE, 
+                padding=CONV_PADDING))
+            enc_layers.append(nn.ReLU())
+            # enc_layers.append(nn.AvgPool2d(
+            #     kernel_size=POOL_KERNEL_SIZE, 
+            #     stride=POOL_STRIDE, 
+            #     padding=POOL_PADDING))
+         
+            # Compute output size for convolution
+            current_height = compute_output_size(current_height, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
+            current_width = compute_output_size(current_width, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
+            
+            # Followed by computing the output size for pooling
+            # current_height = compute_output_size(current_height, POOL_KERNEL_SIZE, POOL_STRIDE, POOL_PADDING)
+            # current_width = compute_output_size(current_width, POOL_KERNEL_SIZE, POOL_STRIDE, POOL_PADDING)
+            
+            # Prepare input_channels of next layer
+            input_channels = output_channels
+
+        print(f"Final height: {current_height} and final width: {current_width}")
+
+        # Flatten the data to be able to apply the linear layer
+        flattened_size = compute_flattened_size(filters[-1], current_height, current_width)
+        print(f"Flattened size: {flattened_size}")
+        enc_layers.append(nn.Flatten())
+        enc_layers.append(nn.Linear(flattened_size, latent_dim))
+
+        # Finally define encoder
+        self.encoder = nn.Sequential(*enc_layers)
+
+        # ----------------
+        # Decoder setup
+        # ----------------
+
+        dec_layers = []
         
-        # Define the decoder with a linear layer and ConvTranspose2d layers
-        self.fc_dec = nn.Linear(latent_dim, some_flattened_size)
-        self.decoder = nn.Sequential(
-            # Example:
-            # nn.ConvTranspose2d(32, input_channels, kernel_size=3, stride=2, padding=1, output_padding=1),
-            # nn.Sigmoid(),
-        )
+        # Convert flattened tensor back to a 4d tensor the decoder can work with
+        # [batch_size, latent_dim] --> [batch_size, flattened_size]
+        dec_layers.append(nn.Linear(latent_dim, flattened_size))
+        # [batch_size, flattened_size] --> [batch_size, filters[-1], height, width]
+        dec_layers.append(nn.Unflatten(dim=1, unflattened_size=(filters[-1], current_height, current_width)))
+
+        # Apply "backward" convolutions
+        input_channels = filters[-1]
+        for output_channels in reversed(filters):
+            dec_layers.append(nn.ConvTranspose2d(
+                input_channels, 
+                output_channels, 
+                kernel_size=CONV_KERNEL_SIZE, 
+                stride=CONV_STRIDE, 
+                padding=CONV_PADDING,
+                output_padding=1)) 
+            dec_layers.append(nn.ReLU())
+            input_channels = output_channels
+
+        dec_layers.append(nn.ConvTranspose2d(
+            in_channels=input_channels, # (= filters[0])
+            out_channels=in_channels,     
+            kernel_size=CONV_KERNEL_SIZE,
+            stride=1, # No spatial change here
+            padding=CONV_PADDING))
+        dec_layers.append(nn.Sigmoid())
+
+        # Finally define decoder
+        self.decoder = nn.Sequential(*dec_layers)
         
     def forward(self, x):
-        # Encode and decode x
-        features = self.encoder(x)
-        features_flat = features.view(features.size(0), -1)
-        latent = self.fc_enc(features_flat)
-        # Decoder: reshape after linear layer
-        dec_input = self.fc_dec(latent)
-        # Reshape dec_input back into feature maps
-        dec_input = dec_input.view(...)  # fill in appropriate shape
-        reconstruction = self.decoder(dec_input)
-        return reconstruction
+        return self.decoder(self.encoder(x))
 
 class VAE(AutoEncoder):
     def __init__(self, input_channels, latent_dim):
