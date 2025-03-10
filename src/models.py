@@ -20,7 +20,6 @@ class AutoEncoder(nn.Module):
         enc_layers = []
         input_channels = in_channels
         for output_channels in filters:
-            print(f"Input channels: {input_channels} and Output channels: {output_channels}")
             enc_layers.append(nn.Conv2d(
                 input_channels, 
                 output_channels, 
@@ -28,27 +27,16 @@ class AutoEncoder(nn.Module):
                 stride=CONV_STRIDE, 
                 padding=CONV_PADDING))
             enc_layers.append(nn.ReLU())
-            # enc_layers.append(nn.AvgPool2d(
-            #     kernel_size=POOL_KERNEL_SIZE, 
-            #     stride=POOL_STRIDE, 
-            #     padding=POOL_PADDING))
          
             # Compute output size for convolution
             current_height = compute_output_size(current_height, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
             current_width = compute_output_size(current_width, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
             
-            # Followed by computing the output size for pooling
-            # current_height = compute_output_size(current_height, POOL_KERNEL_SIZE, POOL_STRIDE, POOL_PADDING)
-            # current_width = compute_output_size(current_width, POOL_KERNEL_SIZE, POOL_STRIDE, POOL_PADDING)
-            
             # Prepare input_channels of next layer
             input_channels = output_channels
 
-        print(f"Final height: {current_height} and final width: {current_width}")
-
         # Flatten the data to be able to apply the linear layer
         flattened_size = compute_flattened_size(filters[-1], current_height, current_width)
-        print(f"Flattened size: {flattened_size}")
         enc_layers.append(nn.Flatten())
         enc_layers.append(nn.Linear(flattened_size, latent_dim))
 

@@ -20,8 +20,4 @@ def compute_flattened_size(num_channels, height, width):
     """
         Returns the flattened size of a tensor with shape `[num_channels, height, width]`
     """
-    print(f"Height: {height}")
-    print(f"Width: {width}")
-    print(f"Num channels: {num_channels}")
-    print(f"Multiplication is: {height*num_channels*width}")
     return num_channels * height * width
