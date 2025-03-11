@@ -1,6 +1,6 @@
 from src.utils.dataset import *
-from utils.audio_plotting import *
-from utils.decorators import chronometer
+from src.utils.audio_plotting import *
+from src.utils.decorators import chronometer
 
 import torchaudio
 from torch.utils.data import Dataset
