@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.config import *
-from src.utils.models import *
+from .config import *
+from utils.models import *
 
 class AutoEncoder(nn.Module):
     def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
