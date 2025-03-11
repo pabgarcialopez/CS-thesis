@@ -64,7 +64,7 @@ class AutoEncoder(nn.Module):
                 kernel_size=CONV_KERNEL_SIZE, 
                 stride=CONV_STRIDE, 
                 padding=CONV_PADDING,
-                output_padding=1)) 
+                output_padding=1)) # Padding 1 to get back correct output dimensions
             dec_layers.append(nn.ReLU())
             input_channels = output_channels
 
