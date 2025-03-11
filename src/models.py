@@ -5,54 +5,53 @@ import torch.nn.functional as F
 from src.config import *
 from src.utils.models import *
 
-class AutoEncoder(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
-        super().__init__()
-
-        # ----------------
-        # Encoder setup
-        # ----------------
+        super(Encoder, self).__init__()
 
         current_height = input_height
         current_width = input_width
 
-        # Define encoder's architecture: (convolution -> activation -> pooling) -> linearity        
-        enc_layers = []
+        # Define the encoder architecture
+        layers = []
         input_channels = in_channels
         for output_channels in filters:
-            enc_layers.append(nn.Conv2d(
+            layers.append(nn.Conv2d(
                 input_channels, 
                 output_channels, 
                 kernel_size=CONV_KERNEL_SIZE, 
                 stride=CONV_STRIDE, 
                 padding=CONV_PADDING))
-            enc_layers.append(nn.ReLU())
-         
+            layers.append(nn.ReLU())
+            
             # Compute output size for convolution
             current_height = compute_output_size(current_height, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
             current_width = compute_output_size(current_width, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
             
-            # Prepare input_channels of next layer
             input_channels = output_channels
-
-        # Flatten the data to be able to apply the linear layer
+        
+        # After the convolutions, flatten the tensor to pass through the fully connected layer
         flattened_size = compute_flattened_size(filters[-1], current_height, current_width)
-        enc_layers.append(nn.Flatten())
-        enc_layers.append(nn.Linear(flattened_size, latent_dim))
+        layers.append(nn.Flatten())
+        layers.append(nn.Linear(flattened_size, latent_dim))
 
-        # Finally define encoder
-        self.encoder = nn.Sequential(*enc_layers)
+        # Define the encoder as a sequential container
+        self.encoder = nn.Sequential(*layers)
 
-        # ----------------
-        # Decoder setup
-        # ----------------
+    def forward(self, x):
+        return self.encoder(x)
+
+class Decoder(nn.Module):
+    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
+        super(Decoder, self).__init__()
+
+        current_height = input_height
+        current_width = input_width
 
         dec_layers = []
         
-        # Convert flattened tensor back to a 4d tensor the decoder can work with
-        # [batch_size, latent_dim] --> [batch_size, flattened_size]
-        dec_layers.append(nn.Linear(latent_dim, flattened_size))
-        # [batch_size, flattened_size] --> [batch_size, filters[-1], height, width]
+        # Convert flattened tensor back to 4d tensor the decoder can work with
+        dec_layers.append(nn.Linear(latent_dim, current_height * current_width * filters[-1]))
         dec_layers.append(nn.Unflatten(dim=1, unflattened_size=(filters[-1], current_height, current_width)))
 
         # Apply "backward" convolutions
@@ -64,30 +63,48 @@ class AutoEncoder(nn.Module):
                 kernel_size=CONV_KERNEL_SIZE, 
                 stride=CONV_STRIDE, 
                 padding=CONV_PADDING,
-                output_padding=1)) # Padding 1 to get back correct output dimensions
+                output_padding=1))  # Padding 1 to get back correct output dimensions
             dec_layers.append(nn.ReLU())
             input_channels = output_channels
 
         dec_layers.append(nn.ConvTranspose2d(
-            in_channels=input_channels, # (= filters[0])
+            in_channels=input_channels,  # (= filters[0])
             out_channels=in_channels,     
             kernel_size=CONV_KERNEL_SIZE,
-            stride=1, # No spatial change here
+            stride=1,  # No spatial change here
             padding=CONV_PADDING))
         dec_layers.append(nn.Sigmoid())
 
-        # Finally define decoder
         self.decoder = nn.Sequential(*dec_layers)
-        
+
+    def forward(self, x):
+        return self.decoder(x)
+
+class AutoEncoder(nn.Module):
+    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
+        super(AutoEncoder, self).__init__()
+
+        # Initialize the encoder and decoder separately
+        self.encoder = Encoder(input_height, input_width, latent_dim, in_channels, filters)
+        self.decoder = Decoder(input_height, input_width, latent_dim, in_channels, filters)
+
     def forward(self, x):
         return self.decoder(self.encoder(x))
 
+# VAE class inherits from AutoEncoder and overrides necessary parts
 class VAE(AutoEncoder):
-    def __init__(self, input_channels, latent_dim):
-        super().__init__(input_channels, latent_dim)
-        # Additional layers for VAE:
-        self.fc_mu = nn.Linear(some_flattened_size, latent_dim)
-        self.fc_logvar = nn.Linear(some_flattened_size, latent_dim)
+    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
+        super(VAE, self).__init__(input_height, input_width, latent_dim, in_channels, filters)
+
+        # Modify the encoder to output both mean and log variance
+        self.fc_mu = nn.Linear(self.encoder.encoder[-1].in_features, latent_dim)
+        self.fc_logvar = nn.Linear(self.encoder.encoder[-1].in_features, latent_dim)
+
+    def encode(self, x):
+        latent_rep = self.encoder(x)
+        mu = self.fc_mu(latent_rep)
+        logvar = self.fc_logvar(latent_rep)
+        return mu, logvar
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -95,41 +112,16 @@ class VAE(AutoEncoder):
         return mu + eps * std
 
     def forward(self, x):
-        # Encoder part: extract features, then get mu and logvar
-        features = self.encoder(x)
-        features_flat = features.view(features.size(0), -1)
-        mu = self.fc_mu(features_flat)
-        logvar = self.fc_logvar(features_flat)
+        mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
-        # Use z as latent for decoder
-        dec_input = self.fc_dec(z)
-        dec_input = dec_input.view(...)  # reshape appropriately
-        reconstruction = self.decoder(dec_input)
-        return reconstruction, mu, logvar
+        return self.decoder(z), mu, logvar
 
-class CVAE(VAE):
-    def __init__(self, input_channels, latent_dim, condition_dim):
-        super().__init__(input_channels, latent_dim)
-        # Modify the architecture to accept conditioning information
-        # For example, add an embedding layer for the condition if needed:
-        self.condition_embed = nn.Linear(condition_dim, condition_dim)
-        # Adjust the encoder and/or decoder to incorporate the condition.
-        # This might be done by concatenating the condition vector with the input or latent vector.
-        
-    def forward(self, x, condition):
-        # Process the condition (e.g., embedding or one-hot encoding)
-        cond_emb = self.condition_embed(condition)
-        # Option 1: Concatenate condition with input:
-        # x = torch.cat([x, cond_emb], dim=?) 
-        # Option 2: Concatenate condition with latent vector:
-        features = self.encoder(x)
-        features_flat = features.view(features.size(0), -1)
-        mu = self.fc_mu(features_flat)
-        logvar = self.fc_logvar(features_flat)
-        z = self.reparameterize(mu, logvar)
-        # Concatenate the latent vector with condition before decoding
-        z_cond = torch.cat([z, cond_emb], dim=1)
-        dec_input = self.fc_dec(z_cond)
-        dec_input = dec_input.view(...)  # reshape appropriately
-        reconstruction = self.decoder(dec_input)
-        return reconstruction, mu, logvar
+    def loss_function(self, recon_x, x, mu, logvar):
+        # Reconstruction loss: MSE
+        BCE = F.mse_loss(recon_x, x, reduction='sum')
+
+        # KL divergence: between learned latent distribution and standard normal
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+        # Total loss is reconstruction loss + KL divergence
+        return BCE + KLD
