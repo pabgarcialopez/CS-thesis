@@ -1,1 +1,1 @@
-# Código asociada al TFG de Ingeniería Informática en la Universidad Complutense de Madrid
+# Code of my (unfinished) Computer Science Bachelors' Thesis: Automatic Generation of Music Notes through Conditional Variational Autoencoders
