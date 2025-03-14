@@ -28,10 +28,9 @@ class NSynth(Dataset):
         metadata = self._metadata[key]
 
         # Get the audio file ready for torchaudio
-        wav_file = get_audio_file(f"{key}.wav", self._partition)
-    
+        wav_path = DATA_PATH / self._partition / "audio" / f"{key}.wav"
+        waveform, sample_rate = torchaudio.load(str(wav_path))
         # waveform.shape = [num_channels, time] = [1, num_samples = 4 * 16000 = 64000]
-        waveform, sample_rate = torchaudio.load(wav_file, format="wav")
 
         if self._transform:
             waveform = self._transform(waveform)

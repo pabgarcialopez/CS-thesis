@@ -60,25 +60,30 @@ INSTRUMENTS_ID2STR = {}
 # Functions for dataset processing
 # ------------------------------------------------------------------------------
 
+# def load_json(partition):
+#     """
+#     Returns the loaded json file examples.com from a specific dataset partition
+#     """
+#     zip_path = DATA_PATH / (partition + '.zip')
+#     json_file_name = f'{partition}/examples.json'
+#     with zipfile.ZipFile(zip_path, 'r') as z:
+#         with z.open(json_file_name, 'r') as json_file:
+#             with io.TextIOWrapper(json_file, encoding='utf-8') as text_file:
+#                 return json.load(text_file)
+
 def load_json(partition):
-    """
-    Returns the loaded json file examples.com from a specific dataset partition
-    """
-    zip_path = DATA_PATH / (partition + '.zip')
-    json_file_name = f'{partition}/examples.json'
-    with zipfile.ZipFile(zip_path, 'r') as z:
-        with z.open(json_file_name, 'r') as json_file:
-            with io.TextIOWrapper(json_file, encoding='utf-8') as text_file:
-                return json.load(text_file)
+    json_path = DATA_PATH / partition / "examples.json"
+    with open(json_path, "r", encoding="utf-8") as f:
+        return json.load(f)
             
-def get_audio_file(audio_file_name, partition):
-    """
-    Returns the ready-to-use file to be used by `torchaudio.load(...)`
-    """
-    zip_path = DATA_PATH / (partition + '.zip')
-    with zipfile.ZipFile(zip_path, 'r') as z:
-        with z.open(f"{partition}/audio/{audio_file_name}") as audio_file:
-            return io.BytesIO(audio_file.read())
+# def get_audio_file(audio_file_name, partition):
+#     """
+#     Returns the ready-to-use file to be used by `torchaudio.load(...)`
+#     """
+#     zip_path = DATA_PATH / (partition + '.zip')
+#     with zipfile.ZipFile(zip_path, 'r') as z:
+#         with z.open(f"{partition}/audio/{audio_file_name}") as audio_file:
+#             return io.BytesIO(audio_file.read())
 
 def process_metadata(json_data):
     """
