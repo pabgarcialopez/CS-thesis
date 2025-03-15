@@ -21,12 +21,12 @@ class NSynth(Dataset):
         key = self._keys[index]
         metadata = self._metadata[key]
 
-        # load the raw .wav from local folder
-        wav_path = DATA_PATH / self._partition / "audio" / f"{key}.wav"
-        waveform, sample_rate = torchaudio.load(str(wav_path))
+        # Load the raw .wav file
+        raw_waveform, sample_rate = load_raw_waveform(self._partition, key)
 
+        # Apply transformation if any
         if self._transform:
-            waveform = self._transform(waveform)
+            transformed_waveform = self._transform(raw_waveform)
 
         # Return (waveform, sample_rate, key, metadata)
-        return waveform, sample_rate, key, metadata
+        return transformed_waveform, sample_rate, key, metadata

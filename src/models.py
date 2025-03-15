@@ -57,7 +57,7 @@ class Decoder(nn.Module):
         out_shape: (channels, height, width) from the encoder
         """
         super().__init__()
-        c_out, h_out, w_out = out_shape  # e.g. (128, 8, 16)
+        c_out, h_out, w_out = out_shape
 
         dec_layers = []
         

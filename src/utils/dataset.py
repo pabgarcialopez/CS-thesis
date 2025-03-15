@@ -99,7 +99,7 @@ def process_metadata(json_data):
     return json_data
 
 # ------------------------------------------------------------------------------
-# Helper: Load raw waveform (no Mel transform)
+# Load raw waveform (no transform applied)
 # ------------------------------------------------------------------------------
 
 def load_raw_waveform(partition, key):
