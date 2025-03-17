@@ -1,5 +1,5 @@
 from src.utils.dataset import *
-from src.utils.audio_plotting import *
+from src.utils.audio_utils import *
 from src.utils.decorators import chronometer
 
 import torchaudio
@@ -22,11 +22,11 @@ class NSynth(Dataset):
         metadata = self._metadata[key]
 
         # Load the raw .wav file
-        raw_waveform, sample_rate = load_raw_waveform(self._partition, key)
+        waveform, sample_rate = load_raw_waveform(self._partition, key)
 
         # Apply transformation if any
         if self._transform:
-            transformed_waveform = self._transform(raw_waveform)
+            waveform = self._transform(waveform)
 
         # Return (waveform, sample_rate, key, metadata)
-        return transformed_waveform, sample_rate, key, metadata
+        return waveform, sample_rate, key, metadata

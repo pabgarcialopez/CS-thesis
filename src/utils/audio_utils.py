@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import torch
+from IPython.display import Audio
 
 def plot_waveform(waveform):
     plt.figure(figsize=(10, 4))
@@ -18,3 +20,14 @@ def plot_spectogram(mel_spec_db):
     plt.xlabel("Time frames")
     plt.ylabel("Frequency Bins (Mel)")
     plt.show()
+
+def listen(waveform, sample_rate=16000):
+    """
+    Utility to play audio in a Jupyter notebook.
+    waveform: torch.Tensor or np.ndarray, shape [1, time] or [time].
+    """
+    if isinstance(waveform, torch.Tensor):
+        waveform = waveform.squeeze().cpu().numpy()
+    else:
+        waveform = waveform.squeeze()
+    return Audio(waveform, rate=sample_rate)
