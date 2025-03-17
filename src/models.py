@@ -1,148 +1,149 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.config import *
-from src.utils.models import compute_output_size, compute_flattened_size
+from src.utils.models import compute_conv2D_output_size, compute_convTranspose2D_output_size, compute_flattened_size
 
 class Encoder(nn.Module):
-    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
+    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128], use_pooling=False, conv_kernel_size=3, conv_stride=2, conv_padding=1, pool_kernel_size=2, pool_stride=2):
         super().__init__()
 
+        self.use_pooling = use_pooling
+        self.output_shapes = []
         current_height = input_height
         current_width = input_width
 
+        self.output_shapes.append((current_height, current_width))
+
         layers = []
         c_in = in_channels
+
         for c_out in filters:
-            layers.append(nn.Conv2d(
-                in_channels=c_in, 
-                out_channels=c_out, 
-                kernel_size=CONV_KERNEL_SIZE, 
-                stride=CONV_STRIDE, 
-                padding=CONV_PADDING))
+
+            layers.append(nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=conv_kernel_size, stride=conv_stride, padding=conv_padding))
             layers.append(nn.ReLU())
-            
-            # Compute output size
-            current_height = compute_output_size(current_height, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
-            current_width = compute_output_size(current_width, CONV_KERNEL_SIZE, CONV_STRIDE, CONV_PADDING)
-            
+
+            # Compute output size after conv
+            current_height = compute_conv2D_output_size(current_height, conv_kernel_size, conv_stride, conv_padding)
+            current_width = compute_conv2D_output_size(current_width, conv_kernel_size, conv_stride, conv_padding)
+
+            if use_pooling:
+                layers.append(nn.MaxPool2d(kernel_size=pool_kernel_size, stride=pool_stride))
+                current_height = compute_conv2D_output_size(current_height, pool_kernel_size, pool_stride, 0)
+                current_width = compute_conv2D_output_size(current_width, pool_kernel_size, pool_stride, 0)
+
+            self.output_shapes.append((current_height, current_width))
+
+            print(self.output_shapes)
+
             c_in = c_out
-        
-        # Flatten + linear to latent_dim
+
         flattened_size = compute_flattened_size(filters[-1], current_height, current_width)
         layers.append(nn.Flatten())
         layers.append(nn.Linear(flattened_size, latent_dim))
-
+        
         self.encoder = nn.Sequential(*layers)
-
-        # Store final shape so the decoder knows how to unflatten
-        self.output_channels = filters[-1]
-        self.output_height = current_height
-        self.output_width = current_width
 
     def forward(self, x):
         return self.encoder(x)
 
-    def get_output_shape(self):
-        """
-        Returns (channels, height, width) that the encoder produces
-        before flattening.
-        """
-        return (self.output_channels, self.output_height, self.output_width)
+    def get_output_shapes(self):
+        return self.output_shapes
+
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim, in_channels, filters, out_shape):
-        """
-        out_shape: (channels, height, width) from the encoder
-        """
+    def __init__(
+        self,
+        latent_dim,
+        in_channels,  
+        filters,
+        output_shapes,   
+        use_pooling=False,
+        conv_kernel_size=3,
+        conv_stride=2,
+        conv_padding=1,
+        pool_kernel_size=2,
+        pool_stride=2
+    ):
         super().__init__()
-        c_out, h_out, w_out = out_shape
-
-        dec_layers = []
         
-        # Convert latent vector back to (c_out, h_out, w_out)
+        c_out = filters[-1]
+        h_out, w_out = output_shapes.pop()
+        dec_layers = []
+
+        # 1) Linear -> Unflatten
         flattened_size = c_out * h_out * w_out
         dec_layers.append(nn.Linear(latent_dim, flattened_size))
         dec_layers.append(nn.Unflatten(dim=1, unflattened_size=(c_out, h_out, w_out)))
 
-        # Reverse the convolution blocks
+        # 2) Reverse the filters
         c_in = c_out
-        for c_out in reversed(filters):
-            dec_layers.append(nn.ConvTranspose2d(
-                in_channels=c_in, 
-                out_channels=c_out, 
-                kernel_size=CONV_KERNEL_SIZE, 
-                stride=CONV_STRIDE, 
-                padding=CONV_PADDING,
-                output_padding=1))  # doubles the spatial dims
-            dec_layers.append(nn.ReLU())
-            c_in = c_out
+        current_height = h_out
+        current_width = w_out
+        for c_rev in reversed(filters):
+            if use_pooling:
+                dec_layers.append(nn.Upsample(scale_factor=pool_stride, mode='nearest'))
+                dec_layers.append(nn.ConvTranspose2d(in_channels=c_in, out_channels=c_rev, kernel_size=conv_kernel_size, stride=1, padding=conv_padding))
+            else:
+                input_size = (current_height, current_width)
+                output_padding = self.compute_output_padding(input_size, conv_kernel_size, conv_stride, conv_padding, output_shapes.pop())
+                dec_layers.append(nn.ConvTranspose2d(
+                    in_channels=c_in,
+                    out_channels=c_rev,
+                    kernel_size=conv_kernel_size,
+                    stride=conv_stride,
+                    padding=conv_padding,
+                    output_padding=output_padding,
+                ))
 
-        # Final layer to get back to in_channels
+                current_height = compute_convTranspose2D_output_size(current_height, conv_kernel_size, conv_stride, conv_padding, output_padding[0])
+                current_width = compute_convTranspose2D_output_size(current_width, conv_kernel_size, conv_stride, conv_padding, output_padding[1])
+
+            dec_layers.append(nn.ReLU())
+            c_in = c_rev
+
+        # 3) Final layer to get back to in_channels
         dec_layers.append(nn.ConvTranspose2d(
-            in_channels=c_in,
-            out_channels=in_channels,
-            kernel_size=CONV_KERNEL_SIZE,
-            stride=1,
-            padding=CONV_PADDING
+            in_channels=c_in, 
+            out_channels=in_channels, 
+            kernel_size=conv_kernel_size, 
+            stride=1, 
+            padding=conv_padding
         ))
-        dec_layers.append(nn.Sigmoid())
 
         self.decoder = nn.Sequential(*dec_layers)
 
     def forward(self, x):
         return self.decoder(x)
+    
+    def compute_output_padding(self, input_size, kernel_size, stride, padding, expected_output_size):
+
+        expected_height_output_size, expected_width_output_size = expected_output_size
+        computed_height_output_size = (input_size[0] - 1) * stride - 2 * padding + kernel_size
+        computed_width_output_size = (input_size[1] - 1) * stride - 2 * padding + kernel_size
+
+        if computed_height_output_size <= expected_height_output_size and computed_width_output_size <= expected_width_output_size:
+            return (expected_height_output_size - computed_height_output_size, expected_width_output_size - computed_width_output_size)
+        
+        raise Exception(f"expected_height_output_size = {expected_height_output_size} > {computed_height_output_size} = computed_height_output_size"
+                        f"orexpected_width_output_size = {expected_width_output_size} > {computed_width_output_size} = computed_width_output_size")
 
 class AutoEncoder(nn.Module):
-    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
+    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128], use_pooling=False, conv_kernel_size=3, conv_stride=2, conv_padding=1, pool_kernel_size=2, pool_stride=2):
         super().__init__()
 
-        # 1) Build the encoder
-        self.encoder = Encoder(input_height, input_width, latent_dim, in_channels, filters)
+        # Build the encoder
+        self.encoder = Encoder(input_height, input_width, latent_dim, in_channels, filters, use_pooling, conv_kernel_size, conv_stride, conv_padding, pool_kernel_size, pool_stride)
 
-        # 2) Get the final shape from the encoder
-        out_shape = self.encoder.get_output_shape()  # e.g. (128, 8, 16)
+        # Get final shape from encoder
+        output_shapes = self.encoder.get_output_shapes()
 
-        # 3) Build the decoder with that shape
-        self.decoder = Decoder(latent_dim, in_channels, filters, out_shape)
+        # Build the decoder
+        self.decoder = Decoder(latent_dim, in_channels, filters, output_shapes, use_pooling, conv_kernel_size, conv_stride, conv_padding, pool_kernel_size, pool_stride)
+
+        print("Encoder: ", self.encoder)
+        print("Decoder: ", self.decoder)
 
     def forward(self, x):
         z = self.encoder(x)
         return self.decoder(z)
 
-
-# VAE class inherits from AutoEncoder and overrides necessary parts
-class VAE(AutoEncoder):
-    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128]):
-        super(VAE, self).__init__(input_height, input_width, latent_dim, in_channels, filters)
-
-        # Modify the encoder to output both mean and log variance
-        self.fc_mu = nn.Linear(self.encoder.encoder[-1].in_features, latent_dim)
-        self.fc_logvar = nn.Linear(self.encoder.encoder[-1].in_features, latent_dim)
-
-    def encode(self, x):
-        latent_rep = self.encoder(x)
-        mu = self.fc_mu(latent_rep)
-        logvar = self.fc_logvar(latent_rep)
-        return mu, logvar
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def forward(self, x):
-        mu, logvar = self.encode(x)
-        z = self.reparameterize(mu, logvar)
-        return self.decoder(z), mu, logvar
-
-    def loss_function(self, recon_x, x, mu, logvar):
-        # Reconstruction loss: MSE
-        BCE = F.mse_loss(recon_x, x, reduction='sum')
-
-        # KL divergence: between learned latent distribution and standard normal
-        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-
-        # Total loss is reconstruction loss + KL divergence
-        return BCE + KLD
