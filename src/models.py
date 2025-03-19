@@ -32,9 +32,6 @@ class Encoder(nn.Module):
                 current_width = compute_conv2D_output_size(current_width, pool_kernel_size, pool_stride, 0)
 
             self.output_shapes.append((current_height, current_width))
-
-            print(self.output_shapes)
-
             c_in = c_out
 
         flattened_size = compute_flattened_size(filters[-1], current_height, current_width)
@@ -80,9 +77,16 @@ class Decoder(nn.Module):
         current_height = h_out
         current_width = w_out
         for c_rev in reversed(filters):
+            
             if use_pooling:
                 dec_layers.append(nn.Upsample(scale_factor=pool_stride, mode='nearest'))
-                dec_layers.append(nn.ConvTranspose2d(in_channels=c_in, out_channels=c_rev, kernel_size=conv_kernel_size, stride=1, padding=conv_padding))
+                dec_layers.append(nn.ConvTranspose2d(
+                    in_channels=c_in,
+                    out_channels=c_rev, 
+                    kernel_size=conv_kernel_size, 
+                    stride=1, 
+                    padding=conv_padding,
+                ))
             else:
                 input_size = (current_height, current_width)
                 output_padding = self.compute_output_padding(input_size, conv_kernel_size, conv_stride, conv_padding, output_shapes.pop())
@@ -130,6 +134,9 @@ class Decoder(nn.Module):
 class AutoEncoder(nn.Module):
     def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128], use_pooling=False, conv_kernel_size=3, conv_stride=2, conv_padding=1, pool_kernel_size=2, pool_stride=2):
         super().__init__()
+
+        if use_pooling:
+            conv_stride = 1
 
         # Build the encoder
         self.encoder = Encoder(input_height, input_width, latent_dim, in_channels, filters, use_pooling, conv_kernel_size, conv_stride, conv_padding, pool_kernel_size, pool_stride)
