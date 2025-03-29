@@ -35,3 +35,9 @@
 
 {"train_loss": 3.873836166329111e-05, "valid_loss": 4.6066402892885065e-05, "num_epochs": 50, "avg_epoch_time": 221.07175954818726, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 1024, "hop_length": 256, "n_mels": 80, "input_height": 80, "input_width": 251, "latent_dim": 256, "in_channels": 1, "filters": [64, 128, 256], "timestamp": "19/03/2025 19:48:08"}
 
+{"train_loss": 0.0001237357967766002, "valid_loss": 0.0001222097694791241, "num_epochs": 50, "avg_epoch_time": 95.45438800811768, "learning_rate": 0.0001, "training_subset_size": 250, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 64, "input_height": 520, "input_width": 992, "latent_dim": 128, "in_channels": 2, "timestamp": "28/03/2025 22:49:07"}
+
+{"train_loss": 0.0001235380993457511, "valid_loss": 0.00012184853622024151, "num_epochs": 50, "avg_epoch_time": 55.60524210929871, "learning_rate": 0.0001, "training_subset_size": 250, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 64, "input_height": 520, "input_width": 992, "latent_dim": 128, "in_channels": 2, "timestamp": "28/03/2025 23:54:02"}
+
+{"train_loss": 0.00012358981603756547, "valid_loss": 0.00012194898128455896, "num_epochs": 50, "avg_epoch_time": 55.75001185417175, "learning_rate": 0.0001, "training_subset_size": 250, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 64, "input_height": 520, "input_width": 992, "latent_dim": 128, "in_channels": 2, "timestamp": "29/03/2025 08:37:41"}
+

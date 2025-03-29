@@ -1,156 +1,113 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.utils.models import compute_conv2D_output_size, compute_convTranspose2D_output_size, compute_flattened_size
+from src.utils.models import *
 
 class Encoder(nn.Module):
-    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128], use_pooling=False, conv_kernel_size=3, conv_stride=2, conv_padding=1, pool_kernel_size=2, pool_stride=2):
+    def __init__(self, input_size, latent_dim, channels):
         super().__init__()
 
-        self.use_pooling = use_pooling
-        self.output_shapes = []
-        current_height = input_height
-        current_width = input_width
+        conv_kernel_size = 3
+        conv_stride = 1
+        conv_padding = 1
 
-        self.output_shapes.append((current_height, current_width))
+        pool_kernel_size = 2
+        pool_stride = 2
+        pool_padding = 0
 
-        layers = []
-        c_in = in_channels
+        # Initialize sizes and compute them iteratively
+        self.sizes = [input_size]
+        current_size = input_size
 
-        for c_out in filters:
+        blocks = []
+        for i in range(1, len(channels)):
+            conv = nn.Conv2d(channels[i - 1], channels[i], kernel_size=conv_kernel_size, stride=conv_stride, padding=conv_padding)
+            current_size = compute_conv2D_output_size(current_size, conv_kernel_size, conv_stride, conv_padding)
+            pool = nn.MaxPool2d(kernel_size=pool_kernel_size, stride=pool_stride, padding=pool_padding)
+            current_size = compute_conv2D_output_size(current_size, pool_kernel_size, pool_stride,  pool_padding)
+            self.sizes.append(current_size)
 
-            layers.append(nn.Conv2d(in_channels=c_in, out_channels=c_out, kernel_size=conv_kernel_size, stride=conv_stride, padding=conv_padding))
-            layers.append(nn.ReLU())
+            block = nn.Sequential(conv, nn.ReLU(), pool)
+            blocks.append(block)
+        self.encoder_blocks = nn.Sequential(*blocks)
 
-            # Compute output size after conv
-            current_height = compute_conv2D_output_size(current_height, conv_kernel_size, conv_stride, conv_padding)
-            current_width = compute_conv2D_output_size(current_width, conv_kernel_size, conv_stride, conv_padding)
-
-            if use_pooling:
-                layers.append(nn.MaxPool2d(kernel_size=pool_kernel_size, stride=pool_stride))
-                current_height = compute_conv2D_output_size(current_height, pool_kernel_size, pool_stride, 0)
-                current_width = compute_conv2D_output_size(current_width, pool_kernel_size, pool_stride, 0)
-
-            self.output_shapes.append((current_height, current_width))
-            c_in = c_out
-
-        flattened_size = compute_flattened_size(filters[-1], current_height, current_width)
-        layers.append(nn.Flatten())
-        layers.append(nn.Linear(flattened_size, latent_dim))
-        
-        self.encoder = nn.Sequential(*layers)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(channels[-1] * current_size[0] * current_size[1], latent_dim)
 
     def forward(self, x):
-        return self.encoder(x)
+        # print("Initial x.shape = ", x.shape)
+        x = self.encoder_blocks(x)
+        # print("x.shape after conv and pool blocks = ", x.shape)
+        x = self.flatten(x)
+        # print("Flattened x.shape = ", x.shape)
+        x = self.fc1(x)
+        # print("Linearized x.shape = ", x.shape)
+        return x
 
-    def get_output_shapes(self):
-        return self.output_shapes
+    def get_sizes(self):
+        # print("Sizes: ", self.sizes)
+        return self.sizes
 
 
 class Decoder(nn.Module):
-    def __init__(
-        self,
-        latent_dim,
-        in_channels,  
-        filters,
-        output_shapes,   
-        use_pooling=False,
-        conv_kernel_size=3,
-        conv_stride=2,
-        conv_padding=1,
-        pool_kernel_size=2,
-        pool_stride=2
-    ):
+    def __init__(self, sizes, latent_dim, channels):
         super().__init__()
-        
-        c_out = filters[-1]
-        h_out, w_out = output_shapes.pop()
-        dec_layers = []
 
-        # 1) Linear -> Unflatten
-        flattened_size = c_out * h_out * w_out
-        dec_layers.append(nn.Linear(latent_dim, flattened_size))
-        dec_layers.append(nn.Unflatten(dim=1, unflattened_size=(c_out, h_out, w_out)))
+        kernel_size = 3
+        stride = 2
+        padding = 1
 
-        # 2) Reverse the filters
-        c_in = c_out
-        current_height = h_out
-        current_width = w_out
-        for c_rev in reversed(filters):
-            
-            if use_pooling:
-                dec_layers.append(nn.Upsample(scale_factor=pool_stride, mode='nearest'))
-                dec_layers.append(nn.ConvTranspose2d(
-                    in_channels=c_in,
-                    out_channels=c_rev, 
-                    kernel_size=conv_kernel_size, 
-                    stride=1, 
-                    padding=conv_padding,
-                ))
-            else:
-                input_size = (current_height, current_width)
-                output_padding = self.compute_output_padding(input_size, conv_kernel_size, conv_stride, conv_padding, output_shapes.pop())
-                dec_layers.append(nn.ConvTranspose2d(
-                    in_channels=c_in,
-                    out_channels=c_rev,
-                    kernel_size=conv_kernel_size,
-                    stride=conv_stride,
-                    padding=conv_padding,
-                    output_padding=output_padding,
-                ))
+        # Reverse channels and sizes without modifying the originals
+        rev_channels = list(reversed(channels))
+        rev_sizes = list(reversed(sizes))
 
-                current_height = compute_convTranspose2D_output_size(current_height, conv_kernel_size, conv_stride, conv_padding, output_padding[0])
-                current_width = compute_convTranspose2D_output_size(current_width, conv_kernel_size, conv_stride, conv_padding, output_padding[1])
+        # Linear layer to expand the latent vector
+        expected_size = rev_sizes[0]
+        current_size = rev_sizes[0]
+        self.fc2 = nn.Linear(latent_dim, rev_channels[0] * expected_size[0] * expected_size[1])
+        self.unflatten = nn.Unflatten(dim=1, unflattened_size=(rev_channels[0], expected_size[0], expected_size[1]))
 
-            dec_layers.append(nn.ReLU())
-            c_in = c_rev
-
-        # 3) Final layer to get back to in_channels
-        dec_layers.append(nn.ConvTranspose2d(
-            in_channels=c_in, 
-            out_channels=in_channels, 
-            kernel_size=conv_kernel_size, 
-            stride=1, 
-            padding=conv_padding
-        ))
-
-        self.decoder = nn.Sequential(*dec_layers)
+        deconv_blocks = []
+        # Build deconvolutional layers iteratively
+        for i in range(1, len(rev_sizes)):
+            expected_size = rev_sizes[i]
+            current_size = compute_convTranspose2D_output_size(current_size, kernel_size, stride, padding)
+            output_padding = compute_output_padding(expected_size, current_size, kernel_size, padding, stride)
+            # print("\nExpected size: ", expected_size)
+            # print("Current size: ", current_size)
+            # print("Output padding size: ", output_padding)
+            current_size = tuple(map(lambda a, b: a + b, current_size, output_padding))
+            # print("Final current size: ", current_size)
+            deconv = nn.ConvTranspose2d(rev_channels[i - 1], rev_channels[i], kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding)
+            block = nn.Sequential(deconv, nn.ReLU())
+            deconv_blocks.append(block)
+        self.deconv_blocks = nn.Sequential(*deconv_blocks)
 
     def forward(self, x):
-        return self.decoder(x)
-    
-    def compute_output_padding(self, input_size, kernel_size, stride, padding, expected_output_size):
+        x = self.fc2(x)
+        x = self.unflatten(x)
+        x = self.deconv_blocks(x)
+        return x
 
-        expected_height_output_size, expected_width_output_size = expected_output_size
-        computed_height_output_size = (input_size[0] - 1) * stride - 2 * padding + kernel_size
-        computed_width_output_size = (input_size[1] - 1) * stride - 2 * padding + kernel_size
-
-        if computed_height_output_size <= expected_height_output_size and computed_width_output_size <= expected_width_output_size:
-            return (expected_height_output_size - computed_height_output_size, expected_width_output_size - computed_width_output_size)
-        
-        raise Exception(f"expected_height_output_size = {expected_height_output_size} > {computed_height_output_size} = computed_height_output_size"
-                        f"orexpected_width_output_size = {expected_width_output_size} > {computed_width_output_size} = computed_width_output_size")
 
 class AutoEncoder(nn.Module):
-    def __init__(self, input_height, input_width, latent_dim, in_channels=1, filters=[32, 64, 128], use_pooling=False, conv_kernel_size=3, conv_stride=2, conv_padding=1, pool_kernel_size=2, pool_stride=2):
+    def __init__(self, input_size, latent_dim):
         super().__init__()
 
-        if use_pooling:
-            conv_stride = 1
+        channels = [2, 16, 32, 64]
 
-        # Build the encoder
-        self.encoder = Encoder(input_height, input_width, latent_dim, in_channels, filters, use_pooling, conv_kernel_size, conv_stride, conv_padding, pool_kernel_size, pool_stride)
-
-        # Get final shape from encoder
-        output_shapes = self.encoder.get_output_shapes()
-
-        # Build the decoder
-        self.decoder = Decoder(latent_dim, in_channels, filters, output_shapes, use_pooling, conv_kernel_size, conv_stride, conv_padding, pool_kernel_size, pool_stride)
+        self.encoder = Encoder(input_size, latent_dim, channels)
+        sizes = self.encoder.get_sizes()
+        self.decoder = Decoder(sizes, latent_dim, channels)
 
         print("Encoder: ", self.encoder)
         print("Decoder: ", self.decoder)
 
     def forward(self, x):
         z = self.encoder(x)
-        return self.decoder(z)
+        reconstructed = self.decoder(z)
 
+        assert reconstructed.shape == x.shape, f"Expected output shape {x.shape}, but got {reconstructed.shape}"
+
+        return reconstructed
