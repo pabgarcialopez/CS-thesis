@@ -41,3 +41,21 @@
 
 {"train_loss": 0.00012358981603756547, "valid_loss": 0.00012194898128455896, "num_epochs": 50, "avg_epoch_time": 55.75001185417175, "learning_rate": 0.0001, "training_subset_size": 250, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 64, "input_height": 520, "input_width": 992, "latent_dim": 128, "in_channels": 2, "timestamp": "29/03/2025 08:37:41"}
 
+{"train_loss": 1.5221781757354735, "valid_loss": 1.7315410122282404, "num_epochs": 50, "avg_epoch_time": 78.97949416160583, "learning_rate": 0.0001, "training_subset_size": 10000, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 64, "input_height": 520, "input_width": 992, "latent_dim": 128, "in_channels": 2, "timestamp": "29/03/2025 09:51:21"}
+
+{"train_loss": 1.6298158277511596, "valid_loss": 1.7651335696990529, "num_epochs": 50, "avg_epoch_time": 46.147560257911685, "learning_rate": 0.0001, "training_subset_size": 20000, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 256, "input_height": 520, "input_width": 248, "latent_dim": 128, "timestamp": "29/03/2025 12:42:09"}
+
+{"train_loss": 1.4962250811342106, "valid_loss": 1.6241064869768895, "num_epochs": 50, "avg_epoch_time": 123.01241626262664, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 520, "hop_length": 256, "input_height": 520, "input_width": 248, "latent_dim": 128, "timestamp": "30/03/2025 13:40:57"}
+
+{"train_loss": 2.1690780302863284, "valid_loss": 2.228876652336211, "num_epochs": 50, "avg_epoch_time": 211.41709708690644, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "30/03/2025 17:32:05"}
+
+{"train_loss": 5.076205740065494, "valid_loss": 4.543824081899316, "num_epochs": 50, "avg_epoch_time": 385.1817064332962, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "31/03/2025 01:00:56"}
+
+{"train_loss": 5.155626563262939, "valid_loss": 4.5438241220306645, "num_epochs": 50, "avg_epoch_time": 72.58649058818817, "learning_rate": 0.0001, "training_subset_size": 20000, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "31/03/2025 13:22:09"}
+
+{"train_loss": 2.1930240257263183, "valid_loss": 2.2638479311170214, "num_epochs": 50, "avg_epoch_time": 74.57991665363312, "learning_rate": 0.0001, "training_subset_size": 20000, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "31/03/2025 17:23:09"}
+
+{"train_loss": 2.193518140792847, "valid_loss": 2.270358739731947, "num_epochs": 50, "avg_epoch_time": 56.518198585510255, "learning_rate": 0.0001, "training_subset_size": 20000, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "31/03/2025 18:21:58"}
+
+{"train_loss": 2.0978180601220866, "valid_loss": 2.1889753981820603, "num_epochs": 50, "avg_epoch_time": 430.2984488344193, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "01/04/2025 00:22:52"}
+
