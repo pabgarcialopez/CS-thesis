@@ -59,3 +59,11 @@
 
 {"train_loss": 2.0978180601220866, "valid_loss": 2.1889753981820603, "num_epochs": 50, "avg_epoch_time": 430.2984488344193, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "01/04/2025 00:22:52"}
 
+{"train_loss": 2.100589902051304, "valid_loss": 2.1914139403249773, "num_epochs": 50, "avg_epoch_time": 414.0969183683395, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "01/04/2025 20:52:05"}
+
+// VAE
+
+{"train_loss": 71470802.5121834, "valid_loss": 71946022.05797444, "num_epochs": 50, "avg_epoch_time": 278.8419307565689, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "02/04/2025 03:42:54"}
+
+{"train_loss": 0.6493279167019301, "valid_loss": 0.6775455658961252, "num_epochs": 50, "avg_epoch_time": 280.6436121940613, "learning_rate": 0.0001, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 512, "hop_length": 128, "input_height": 512, "input_width": 497, "latent_dim": 128, "timestamp": "02/04/2025 20:24:03"}
+

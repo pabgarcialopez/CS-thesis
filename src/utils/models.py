@@ -4,7 +4,7 @@
 
 from math import floor
 import torch
-import torch.functional as F
+import torch.nn.functional as F
 
 def compute_magnitude_and_phase(stft_spec):
     magnitude = stft_spec.abs()  
@@ -39,7 +39,11 @@ def compute_convTranspose2D_output_size(input_size, kernel_size, stride, padding
 def compute_output_padding(expected_output_size, computed_output_size):
     return (expected_output_size[0] - computed_output_size[0], expected_output_size[1] - computed_output_size[1])
 
-def adjust_shape(x, target_height, target_width):
+def adjust_shape(x, target_size):
+
+    target_height = target_size[0]
+    target_width = target_size[1]
+
     # Crop or pad height
     H, W = x.shape[2], x.shape[3]
     if H > target_height:
@@ -56,3 +60,4 @@ def adjust_shape(x, target_height, target_width):
         x = F.pad(x, (0, pad_w, 0, 0))
     
     return x
+
