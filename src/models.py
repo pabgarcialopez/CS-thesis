@@ -15,7 +15,7 @@ class Encoder(nn.Module):
         conv_padding = (1, 1)
 
         self.sizes = [input_size]
-        current_size = input_size  # e.g., (512, 497)
+        current_size = input_size
 
         blocks = []
         for i in range(1, len(channels)):
@@ -102,7 +102,6 @@ class AutoEncoder(nn.Module):
         # Adjusted filter configuration
         channels = [2, 32, 64, 128]
 
-
         self.encoder = Encoder(input_size, latent_dim, channels)
         sizes = self.encoder.get_sizes()
         self.decoder = Decoder(sizes, latent_dim, channels)
@@ -119,41 +118,104 @@ class AutoEncoder(nn.Module):
         return reconstructed
     
 
+# class VAE(nn.Module):
+#     def __init__(self, input_size, latent_dim):
+#         super().__init__()
+
+#         self.input_size = input_size
+#         self.latent_dim = latent_dim
+
+#         self.normal = Normal(0, 1)
+#         self.normal.loc = self.normal.loc.cuda()
+#         self.normal.scale = self.normal.scale.cuda()
+
+#         channels = [2, 16, 32, 64]
+
+#         self.encoder = Encoder(input_size, latent_dim, channels, variational=True)
+#         sizes = self.encoder.get_sizes()
+#         self.decoder = Decoder(sizes, latent_dim, channels)
+
+#         print("Encoder: ", self.encoder)
+#         print("Decoder: ", self.decoder)
+
+#     def reparameterization(self, mean, var):
+#         eps = self.normal.sample(mean.shape)
+#         return mean + var * eps
+
+#     def forward(self, x):
+#         mean, log_var = self.encoder(x)
+#         x = self.reparameterization(mean, log_var)
+#         x_hat = self.decoder(x)
+#         x_hat = adjust_shape(x_hat, self.input_size)
+#         return x_hat, mean, log_var
+
+#     def loss_function(self, x, x_hat, mean, log_var, batch_size):
+#         # Mean squared error loss
+#         BCE = F.mse_loss(x, x_hat, reduction='mean')
+#         # KL divergence between N(mu, var) and N(0, 1) is
+#         KL = -0.5 * torch.sum(1 + log_var - torch.exp(log_var) - torch.pow(mean, 2)) / batch_size
+#         return 0.6 * BCE + 0.4 * KL
+
 class VAE(nn.Module):
-    def __init__(self, input_size, latent_dim):
+    def __init__(self, input_size, latent_dim, conditional=False, num_classes=None):
         super().__init__()
 
         self.input_size = input_size
         self.latent_dim = latent_dim
+        self.conditional = conditional
+        self.num_classes = num_classes
 
         self.normal = Normal(0, 1)
         self.normal.loc = self.normal.loc.cuda()
         self.normal.scale = self.normal.scale.cuda()
 
-        channels = [2, 16, 32, 64]
-
-        self.encoder = Encoder(input_size, latent_dim, channels, variational=True)
+        self.channels = [2, 16, 32, 64] 
+        self.encoder = Encoder(input_size, latent_dim, self.channels, variational=True)
         sizes = self.encoder.get_sizes()
-        self.decoder = Decoder(sizes, latent_dim, channels)
+        self.decoder = Decoder(sizes, latent_dim, self.channels)  
 
-        print("Encoder: ", self.encoder)
-        print("Decoder: ", self.decoder)
+        if conditional:
+            H, W = input_size
+            C = self.channels[0]
+            self.label_projector_encoder = nn.Sequential(
+                nn.Linear(num_classes, C * H * W),
+                nn.ReLU()
+            )
+            self.label_projector_decoder = nn.Sequential(
+                nn.Linear(num_classes, latent_dim),
+                nn.ReLU()
+            )
 
-    def reparameterization(self, mean, var):
+        print("Encoder:", self.encoder)
+        print("Decoder:", self.decoder)
+
+    def reparameterization(self, mean, log_var):
         eps = self.normal.sample(mean.shape)
-        return mean + var * eps
+        return mean + torch.exp(0.5 * log_var) * eps
 
-    def forward(self, x):
+    def forward(self, x, y=None):
+        B, C, H, W = x.shape
+
+        if self.conditional:
+            y_enc = self.label_projector_encoder(y.float()).view(B, C, H, W)
+            x = x + y_enc
+
         mean, log_var = self.encoder(x)
-        x = self.reparameterization(mean, log_var)
-        x_hat = self.decoder(x)
+        z = self.reparameterization(mean, log_var)
+
+        if self.conditional:
+            z = z + self.label_projector_decoder(y.float())
+
+        x_hat = self.decoder(z)
         x_hat = adjust_shape(x_hat, self.input_size)
         return x_hat, mean, log_var
 
     def loss_function(self, x, x_hat, mean, log_var, batch_size):
-        # Mean squared error loss
         BCE = F.mse_loss(x, x_hat, reduction='mean')
-        # KL divergence between N(mu, var) and N(0, 1) is
-        KL = -0.5 * torch.sum(1 + log_var - torch.exp(log_var) - torch.pow(mean, 2)) / batch_size
-        return 0.7 * BCE + 0.3 * KL
+        KL = -0.5 * torch.sum(1 + log_var - torch.exp(log_var) - mean.pow(2)) / batch_size
+        return 0.6 * BCE + 0.4 * KL
+    
+class CVAE(VAE):
+    def __init__(self, input_size, latent_dim, num_classes):
+        super().__init__(input_size, latent_dim, conditional=True, num_classes=num_classes)
 

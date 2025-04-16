@@ -1,0 +1,2 @@
+{"train_loss": 1.4740461333654837, "valid_loss": 1.5904493135577742, "num_epochs": 30, "avg_epoch_time": 612.8716657638549, "learning_rate": 0.0015, "training_subset_size": 289205, "batch_size": 64, "sample_rate": 16000, "n_fft": 800, "hop_length": 100, "input_height": 800, "input_width": 633, "latent_dim": 256, "timestamp": "15/04/2025 16:19:51"}
+

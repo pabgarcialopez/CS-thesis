@@ -28,5 +28,5 @@ class NSynth(Dataset):
         if self._transform:
             waveform = self._transform(waveform)
 
-        # Return (waveform, sample_rate, key, metadata)
+        # Return (waveform, sample_rate, metadata)
         return waveform, sample_rate, key, metadata
