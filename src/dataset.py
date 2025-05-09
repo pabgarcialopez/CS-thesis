@@ -1,6 +1,5 @@
 from src.utils.dataset import *
 from src.utils.audio_utils import *
-from src.utils.decorators import chronometer
 
 import torchaudio
 from torch.utils.data import Dataset
@@ -28,5 +27,5 @@ class NSynth(Dataset):
         if self._transform:
             waveform = self._transform(waveform)
 
-        # Return (waveform, sample_rate, metadata)
+        # Return (waveform, sample_rate, key, metadata)
         return waveform, sample_rate, key, metadata

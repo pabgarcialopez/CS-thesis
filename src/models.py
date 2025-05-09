@@ -19,16 +19,11 @@ class Encoder(nn.Module):
 
         blocks = []
         for i in range(1, len(channels)):
-            # Convolution layer with stride 2 (downsampling)
-            conv = nn.Conv2d(channels[i - 1], channels[i],
-                             kernel_size=conv_kernel_size,
-                             stride=conv_stride,
-                             padding=conv_padding)
-            # Compute size after convolution
+            conv = nn.Conv2d(channels[i - 1], channels[i], kernel_size=conv_kernel_size, stride=conv_stride,padding=conv_padding)
             current_size = compute_conv2D_output_size(current_size, conv_kernel_size, conv_stride, conv_padding)
             self.sizes.append(current_size)
 
-            block = nn.Sequential(conv, nn.ReLU())
+            block = nn.Sequential(conv, nn.ReLU())#, nn.BatchNorm2d(channels[i]))
             blocks.append(block)
         self.encoder = nn.Sequential(*blocks)
 
@@ -69,7 +64,7 @@ class Decoder(nn.Module):
         rev_sizes = list(reversed(sizes))
 
         expected_size = rev_sizes[0]
-        self.fc2 = nn.Linear(latent_dim, rev_channels[0] * expected_size[0] * expected_size[1])
+        self.fc = nn.Linear(latent_dim, rev_channels[0] * expected_size[0] * expected_size[1])
         self.unflatten = nn.Unflatten(dim=1, unflattened_size=(rev_channels[0], expected_size[0], expected_size[1]))
 
         deconv_blocks = []
@@ -87,7 +82,7 @@ class Decoder(nn.Module):
         self.decoder = nn.Sequential(*deconv_blocks)
 
     def forward(self, x):
-        x = self.fc2(x)
+        x = self.fc(x)
         x = self.unflatten(x)
         x = self.decoder(x)
         return x
@@ -98,9 +93,7 @@ class AutoEncoder(nn.Module):
         super().__init__()
 
         self.input_size = input_size
-
-        # Adjusted filter configuration
-        channels = [2, 32, 64, 128]
+        channels = [2, 16, 32, 64]
 
         self.encoder = Encoder(input_size, latent_dim, channels)
         sizes = self.encoder.get_sizes()
@@ -114,47 +107,7 @@ class AutoEncoder(nn.Module):
         reconstructed = self.decoder(z)
         target_height, target_width = x.shape[2], x.shape[3]
         reconstructed = adjust_shape(reconstructed, (target_height, target_width))
-        assert reconstructed.shape == x.shape, f"Expected {x.shape}, got {reconstructed.shape}"
         return reconstructed
-    
-
-# class VAE(nn.Module):
-#     def __init__(self, input_size, latent_dim):
-#         super().__init__()
-
-#         self.input_size = input_size
-#         self.latent_dim = latent_dim
-
-#         self.normal = Normal(0, 1)
-#         self.normal.loc = self.normal.loc.cuda()
-#         self.normal.scale = self.normal.scale.cuda()
-
-#         channels = [2, 16, 32, 64]
-
-#         self.encoder = Encoder(input_size, latent_dim, channels, variational=True)
-#         sizes = self.encoder.get_sizes()
-#         self.decoder = Decoder(sizes, latent_dim, channels)
-
-#         print("Encoder: ", self.encoder)
-#         print("Decoder: ", self.decoder)
-
-#     def reparameterization(self, mean, var):
-#         eps = self.normal.sample(mean.shape)
-#         return mean + var * eps
-
-#     def forward(self, x):
-#         mean, log_var = self.encoder(x)
-#         x = self.reparameterization(mean, log_var)
-#         x_hat = self.decoder(x)
-#         x_hat = adjust_shape(x_hat, self.input_size)
-#         return x_hat, mean, log_var
-
-#     def loss_function(self, x, x_hat, mean, log_var, batch_size):
-#         # Mean squared error loss
-#         BCE = F.mse_loss(x, x_hat, reduction='mean')
-#         # KL divergence between N(mu, var) and N(0, 1) is
-#         KL = -0.5 * torch.sum(1 + log_var - torch.exp(log_var) - torch.pow(mean, 2)) / batch_size
-#         return 0.6 * BCE + 0.4 * KL
 
 class VAE(nn.Module):
     def __init__(self, input_size, latent_dim, conditional=False, num_classes=None):
@@ -190,10 +143,21 @@ class VAE(nn.Module):
         print("Decoder:", self.decoder)
 
     def reparameterization(self, mean, log_var):
+        std = torch.exp(0.5 * log_var)
         eps = self.normal.sample(mean.shape)
-        return mean + torch.exp(0.5 * log_var) * eps
-
-    def forward(self, x, y=None):
+        Z = mean + eps * std
+        return Z.to(device=std.device)
+    
+    def compute_kld(self, mean, log_var):
+        var = log_var.exp()
+        kld = -0.5 * (1 + log_var - mean**2 - var).sum(dim=-1)
+        return kld
+    
+    def evaluate_logprob_diagonal_gaussian(self, z, *, mean, log_var):
+        gauss = torch.distributions.Normal(loc=mean, scale=torch.exp(0.5*log_var))
+        return gauss.log_prob(z).sum(dim=-1)
+    
+    def calculate_elbo(self, x, y):
         B, C, H, W = x.shape
 
         if self.conditional:
@@ -206,16 +170,23 @@ class VAE(nn.Module):
         if self.conditional:
             z = z + self.label_projector_decoder(y.float())
 
-        x_hat = self.decoder(z)
-        x_hat = adjust_shape(x_hat, self.input_size)
-        return x_hat, mean, log_var
+        logits = self.decoder(z)
 
-    def loss_function(self, x, x_hat, mean, log_var, batch_size):
-        BCE = F.mse_loss(x, x_hat, reduction='mean')
-        KL = -0.5 * torch.sum(1 + log_var - torch.exp(log_var) - mean.pow(2)) / batch_size
-        return 0.6 * BCE + 0.4 * KL
+        kld = self.compute_kld(mean, log_var)
+        cross_entropy = self.evaluate_logprob_diagonal_gaussian(z, mean=mean, log_var=log_var)
+
+        # Return ELBOs
+        return cross_entropy - kld
+        
+
+    # y is the labels tensor
+    def forward(self, x, y=None):
+        return self.calculate_elbo(x, y)
+
+    def loss_function(self, elbos):
+        # elbos is a tensor of shape (B)
+        return -(elbos.mean(0)) # Loss is -elbo
     
 class CVAE(VAE):
     def __init__(self, input_size, latent_dim, num_classes):
         super().__init__(input_size, latent_dim, conditional=True, num_classes=num_classes)
-

@@ -21,8 +21,6 @@ def plot_mel_spectrogram(mel_spec_db):
     plt.ylabel("Frequency Bins (Mel)")
     plt.show()
 
-    
-
 def plot_spectrogram(waveform, sample_rate, n_fft, hop_length):
 
     ft = np.abs(librosa.stft(waveform, n_fft=n_fft,  hop_length=512))
@@ -38,20 +36,17 @@ def plot_spectrogram(waveform, sample_rate, n_fft, hop_length):
     librosa.display.specshow(mel_sp, y_axis='mel', fmax=8000, x_axis='time')
     plt.colorbar(format='%+2.0f dB')
 
-
-
-
     # Compute and plot the STFT spectrogram
-    # D = librosa.stft(waveform.numpy()[0], n_fft=n_fft, hop_length=hop_length)
-    # D_db = librosa.amplitude_to_db(np.abs(D), ref=np.max)
+    D = librosa.stft(waveform.numpy()[0], n_fft=n_fft, hop_length=hop_length)
+    D_db = librosa.amplitude_to_db(np.abs(D), ref=np.max)
     
-    # plt.figure(figsize=(10, 4))
-    # plt.title("Spectrogram")
-    # librosa.display.specshow(D_db, sr=sample_rate, x_axis='time', y_axis='log')
-    # plt.colorbar(label='dB')
-    # plt.xlabel("Time (s)")
-    # plt.ylabel("Frequency (Hz)")
-    # plt.show()
+    plt.figure(figsize=(10, 4))
+    plt.title("Spectrogram")
+    librosa.display.specshow(D_db, sr=sample_rate, x_axis='time', y_axis='log')
+    plt.colorbar(label='dB')
+    plt.xlabel("Time (s)")
+    plt.ylabel("Frequency (Hz)")
+    plt.show()
 
 def listen(waveform, sample_rate=16000):
     """

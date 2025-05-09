@@ -6,9 +6,15 @@ from math import floor
 import torch
 import torch.nn.functional as F
 
-def compute_magnitude_and_phase(stft_spec):
+MAX_MAGNITUDE = 165.65298461914062
+MAX_PHASE = torch.pi
+
+def compute_magnitude_and_phase(stft_spec, normalize=False):
     magnitude = stft_spec.abs()  
-    phase = torch.angle(stft_spec) 
+    phase = torch.angle(stft_spec)
+    if normalize:
+        magnitude /= MAX_MAGNITUDE
+        phase /= MAX_PHASE
     return magnitude, phase
 
 def compute_conv2D_output_size(input_size, kernel_size, stride, padding):
