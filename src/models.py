@@ -82,9 +82,9 @@ class Decoder(nn.Module):
                 output_padding=output_padding
             )
 
-            # Don't add RELU in 
+            # Don't add RELU in last layer.
 
-            if i < len(rev_sizes) - 1 or not variational:
+            if i < len(rev_sizes) - 1: # or not variational:
                 block = nn.Sequential(deconv, nn.ReLU())
             else:
                 block = nn.Sequential(deconv)
@@ -160,50 +160,17 @@ class VAE(nn.Module):
         Z = mean + eps * std
         return Z.to(device=std.device)
     
-    def compute_kld(self, mu, logvar, free_bits=0.0):
-        kld_per_dim = -0.5 * (1 + logvar - mu**2 - logvar.exp())
-        if free_bits > 0: # To try to fight posterior collapse
-            kld_per_dim = torch.clamp(kld_per_dim, min=free_bits)
-        return kld_per_dim.sum(dim=-1)
-    
-    def evaluate_logprob_diagonal_gaussian(self, z, *, mean, log_var):
-        gauss = torch.distributions.Normal(loc=mean, scale=torch.exp(0.5*log_var))
-        return gauss.log_prob(z).sum(dim=-1)
-    
-    # def calculate_elbo(self, x, y):
-    #     B, C, H, W = x.shape
+    def compute_kld(self, mu, logvar):
+        kld = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=0)
+        return kld
 
-    #     if self.conditional:
-    #         y_enc = self.label_projector_encoder(y.float()).view(B, C, H, W)
-    #         x = x + y_enc
-
-    #     _, mean, log_var = self.encoder(x)
-    #     log_var = torch.clamp(log_var, min=-20, max=20)
-    #     z = self.reparameterization(mean, log_var)
-
-    #     if self.conditional:
-    #         z = z + self.label_projector_decoder(y.float())
-
-    #     logits = self.decoder(z)
-
-    #     kld = self.compute_kld(mean, log_var)
-    #     cross_entropy = self.evaluate_logprob_diagonal_gaussian(z, mean=mean, log_var=log_var)
-
-    #     # Return ELBOs
-    #     return cross_entropy, kld
-
-    def calculate_elbo(self, x, y=None, sigma=1.0):
+    def calculate_elbo(self, x, sigma=1.0):
         """
         Compute per-sample ELBO = log p(x|z) - KL[q(z|x) || p(z)]
         where p(x|z) = Normal(decoder(z), sigma^2 I)
         Returns tensor of shape (B,)
         """
         B, C, H, W = x.shape
-
-        # If using a conditional VAE, incorporate label into encoder input
-        if self.conditional and y is not None:
-            y_enc = self.label_projector_encoder(y.float()).view(B, C, H, W)
-            x = x + y_enc
 
         # Encode to get posterior parameters
         _, mean, log_var = self.encoder(x)
@@ -212,73 +179,22 @@ class VAE(nn.Module):
         # Sample z ~ q(z|x)
         z = self.reparameterization(mean, log_var)
 
-        # If conditional, incorporate label into latent
-        if self.conditional and y is not None:
-            z = z + self.label_projector_decoder(y.float())
-
         # Decode to reconstruction
         x_hat = self.decoder(z)
         x_hat = adjust_shape(x_hat, (H, W))  # shape [B,2,H,W]
 
-        # (6) Monte Carlo estimate of E_q[log p(x|z)] under Gaussian
+        # Monte Carlo estimate of E_q[log p(x|z)] under Gaussian
         sq_err   = ((x_hat - x) ** 2).mean(dim=(1,2,3))  # per-sample MSE
         log_px_z = - sq_err / (2 * sigma**2)           # (B,)
 
-        # (7) the KL term remains
-        kld = self.compute_kld(mean, log_var)          # (B,)
+        # The KL term remains
+        kld = self.compute_kld(mean, log_var, free_bits=0.0)          # (B,)
 
         return log_px_z, kld
 
-    # def calculate_elbo(self, x, y=None, eps=1e-6):
-    #     """
-    #     ELBO = E_q [ log p(x|z) ] - KL(q(z|x)||p(z))
-    #     where p(x|z) is modeled as a Continuous Bernoulli on each pixel,
-    #     after mapping x (mag & phase) to [0,1].
-    #     """
-    #     B, C, H, W = x.shape
-
-    #     # 1) (optional) conditional encoder input
-    #     if self.conditional and y is not None:
-    #         y_enc = self.label_projector_encoder(y.float()).view(B, C, H, W)
-    #         x = x + y_enc
-
-    #     # 2) encode → q(z|x) parameters
-    #     _, mean, log_var = self.encoder(x)
-    #     log_var = torch.clamp(log_var, min=-20, max=20)
-
-    #     # 3) sample z via reparam trick
-    #     z = self.reparameterization(mean, log_var)
-
-    #     # 4) (optional) conditional latent shift
-    #     if self.conditional and y is not None:
-    #         z = z + self.label_projector_decoder(y.float())
-
-    #     # 5) decode → logits for Continuous Bernoulli
-    #     x_hat = self.decoder(z)
-    #     x_hat = adjust_shape(x_hat, (H, W))  # [B,2,H,W]
-
-    #     # 6) normalize true x into [0,1] per channel
-    #     mag   = x[:, 0, :, :]                # [B,H,W]
-    #     phase = x[:, 1, :, :]                # [B,H,W]
-    #     mag_n   = mag.div(MAX_MAGNITUDE)                     # in [0,1]
-    #     phase_n = (phase + MAX_PHASE).div(2 * MAX_PHASE)     # in [0,1]
-    #     x_n = torch.stack([mag_n, phase_n], dim=1)           # [B,2,H,W]
-    #     x_n = x_n.clamp(eps, 1 - eps)
-
-    #     # 7) Continuous Bernoulli log-likelihood
-    #     cb = ContinuousBernoulli(logits=x_hat)
-    #     # sum over channels, height, width --> (B,)
-    #     log_px_z = cb.log_prob(x_n).sum(dim=(1,2,3))
-
-    #     # 8) KL divergence term
-    #     kld = self.compute_kld(mean, log_var)  # also (B,)
-
-    #     # 9) ELBO per sample
-    #     return log_px_z, kld
-
     # y is the labels tensor
-    def forward(self, x, y=None):
-        return self.calculate_elbo(x, y)
+    def forward(self, x):
+        return self.calculate_elbo(x)
 
     def loss_function(self, log_px_z, kld, beta=1.0):
         # elbos is a tensor of shape (B)
