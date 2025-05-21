@@ -121,37 +121,24 @@ class AutoEncoder(nn.Module):
         return reconstructed
 
 class VAE(nn.Module):
-    def __init__(self, input_size, latent_dim, conditional=False, num_classes=None):
+    def __init__(self, input_size, latent_dim, conditional=False, channels=None):
         super().__init__()
+        
+        if not channels:
+            raise ValueError('channels argument must be a non-empty list and not null')
 
         self.input_size = input_size
         self.latent_dim = latent_dim
         self.conditional = conditional
-        self.num_classes = num_classes
 
         self.normal = Normal(0, 1)
         self.normal.loc = self.normal.loc.cuda()
         self.normal.scale = self.normal.scale.cuda()
 
-        self.channels = [2, 16, 32, 64] 
+        self.channels = channels
         self.encoder = Encoder(input_size, latent_dim, self.channels, variational=True)
         sizes = self.encoder.get_sizes()
         self.decoder = Decoder(sizes, latent_dim, self.channels, variational=True)  
-
-        if conditional:
-            H, W = input_size
-            C = self.channels[0]
-            self.label_projector_encoder = nn.Sequential(
-                nn.Linear(num_classes, C * H * W),
-                nn.ReLU()
-            )
-            self.label_projector_decoder = nn.Sequential(
-                nn.Linear(num_classes, latent_dim),
-                nn.ReLU()
-            )
-
-        print("Encoder:", self.encoder)
-        print("Decoder:", self.decoder)
 
     def reparameterization(self, mean, log_var):
         
