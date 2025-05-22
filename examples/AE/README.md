@@ -10,11 +10,8 @@ Inside each `NN/` folder:
    - `X.wav` is the input.  
    - `Xr.wav` is the autoencoder’s reconstruction of `X.wav`.
 
-2. **`autoencoder.pth`**  
-   The saved PyTorch model of the trained autoencoder.
-
-3. **`losses.png`**  
+2. **`losses.png`**  
    A plot showing training (and validation) loss curves across epochs.
 
-4. **`configs.txt`**  
+3. **`configs.txt`**  
    JSON-formatted configuration parameters used for that experiment.
