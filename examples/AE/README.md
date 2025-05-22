@@ -14,4 +14,4 @@ Inside each `NN/` folder:
    A plot showing training (and validation) loss curves across epochs.
 
 3. **`configs.txt`**  
-   JSON-formatted configuration parameters used for that experiment.
+   Configuration parameters used for that experiment.
