@@ -1,5 +1,5 @@
 import torch.nn as nn
-from torch.distributions import Normal, ContinuousBernoulli
+from torch.distributions import Normal
 from src.utils.models import *
 
 
@@ -29,6 +29,7 @@ class Encoder(nn.Module):
                 block = nn.Sequential(conv, nn.ReLU(), nn.BatchNorm2d(channels[i]))
 
             blocks.append(block)
+
         self.encoder = nn.Sequential(*blocks)
 
         self.flatten = nn.Flatten()
@@ -82,15 +83,14 @@ class Decoder(nn.Module):
                 output_padding=output_padding
             )
 
-            # Don't add RELU in last layer.
-
-            if i < len(rev_sizes) - 1: # or not variational:
+            # Don't add RELU in last layer in the case of a Variational Decoder
+            if i < len(rev_sizes) - 1 or not variational:
                 block = nn.Sequential(deconv, nn.ReLU())
             else:
                 block = nn.Sequential(deconv)
 
             deconv_blocks.append(block)
-        self.decoder = nn.Sequential(*deconv_blocks)
+        self.decoder = nn.Sequential(*deconv_blocks)# , nn.Sigmoid())
 
     def forward(self, x):
         x = self.fc(x)
@@ -100,18 +100,18 @@ class Decoder(nn.Module):
 
 
 class AutoEncoder(nn.Module):
-    def __init__(self, input_size, latent_dim):
+    def __init__(self, input_size, latent_dim, channels=None):
         super().__init__()
 
+        if not channels:
+            raise ValueError('channels argument in AutoEncoder class must be valid')
+
         self.input_size = input_size
-        channels = [2, 16, 32, 64]
+        self.channels = channels
 
         self.encoder = Encoder(input_size, latent_dim, channels)
         sizes = self.encoder.get_sizes()
         self.decoder = Decoder(sizes, latent_dim, channels)
-
-        print("Encoder: ", self.encoder)
-        print("Decoder: ", self.decoder)
 
     def forward(self, x):
         z = self.encoder(x)
@@ -121,34 +121,34 @@ class AutoEncoder(nn.Module):
         return reconstructed
 
 class VAE(nn.Module):
-    def __init__(self, input_size, latent_dim, conditional=False, channels=None):
+    def __init__(self, input_size, latent_dim, channels=None):
         super().__init__()
         
         if not channels:
-            raise ValueError('channels argument must be a non-empty list and not null')
+            raise ValueError('channels argument in VAE class must be valid')
 
         self.input_size = input_size
         self.latent_dim = latent_dim
-        self.conditional = conditional
+        self.channels = channels
 
         self.normal = Normal(0, 1)
         self.normal.loc = self.normal.loc.cuda()
         self.normal.scale = self.normal.scale.cuda()
 
-        self.channels = channels
         self.encoder = Encoder(input_size, latent_dim, self.channels, variational=True)
         sizes = self.encoder.get_sizes()
         self.decoder = Decoder(sizes, latent_dim, self.channels, variational=True)  
 
+        print("Model:\n", self)
+
     def reparameterization(self, mean, log_var):
-        
         std = torch.exp(0.5 * log_var)
         eps = self.normal.sample(mean.shape)
         Z = mean + eps * std
         return Z.to(device=std.device)
     
     def compute_kld(self, mu, logvar):
-        kld = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=0)
+        kld = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=-1)
         return kld
 
     def calculate_elbo(self, x, sigma=1.0):
@@ -159,23 +159,25 @@ class VAE(nn.Module):
         """
         B, C, H, W = x.shape
 
-        # Encode to get posterior parameters
+        # 1) Encode to get posterior parameters
         _, mean, log_var = self.encoder(x)
         log_var = torch.clamp(log_var, min=-20, max=20)
 
-        # Sample z ~ q(z|x)
+        # 2) Sample z ~ q(z|x)
         z = self.reparameterization(mean, log_var)
 
-        # Decode to reconstruction
+        # 3) Decode to reconstruction, with reflect padding
         x_hat = self.decoder(z)
-        x_hat = adjust_shape(x_hat, (H, W))  # shape [B,2,H,W]
+        x_hat = adjust_shape(x_hat, (H, W), pad_mode='reflect')  # [B,C,H,W]
 
-        # Monte Carlo estimate of E_q[log p(x|z)] under Gaussian
-        sq_err   = ((x_hat - x) ** 2).mean(dim=(1,2,3))  # per-sample MSE
-        log_px_z = - sq_err / (2 * sigma**2)           # (B,)
+        # 4) True Gaussian log-likelihood reconstruction term
+        #    p(x|z) = Normal(loc=x_hat, scale=sigma)
+        dist = Normal(loc=x_hat, scale=sigma)
+        #    log_prob per pixel, sum over C×H×W → (B,)
+        log_px_z = dist.log_prob(x).view(B, -1).sum(dim=1)
 
-        # The KL term remains
-        kld = self.compute_kld(mean, log_var, free_bits=0.0)          # (B,)
+        # 5) KL divergence term
+        kld = self.compute_kld(mean, log_var)  # (B,)
 
         return log_px_z, kld
 
@@ -183,10 +185,7 @@ class VAE(nn.Module):
     def forward(self, x):
         return self.calculate_elbo(x)
 
-    def loss_function(self, log_px_z, kld, beta=1.0):
-        # elbos is a tensor of shape (B)
-        return -(log_px_z - beta * kld).mean(0) # Loss is -elbo
-    
-class CVAE(VAE):
-    def __init__(self, input_size, latent_dim, num_classes):
-        super().__init__(input_size, latent_dim, conditional=True, num_classes=num_classes)
+    def loss_function(self, recon_term, kld, beta=1.0):
+        # We return -ELBO meaned, since we'retrying to maximize ELBO
+        return -(recon_term - beta * kld).mean()
+

@@ -45,25 +45,72 @@ def compute_convTranspose2D_output_size(input_size, kernel_size, stride, padding
 def compute_output_padding(expected_output_size, computed_output_size):
     return (expected_output_size[0] - computed_output_size[0], expected_output_size[1] - computed_output_size[1])
 
-def adjust_shape(x, target_size):
+# def adjust_shape(x, target_size):
 
-    target_height = target_size[0]
-    target_width = target_size[1]
+#     target_height = target_size[0]
+#     target_width = target_size[1]
 
-    # Crop or pad height
-    H, W = x.shape[2], x.shape[3]
-    if H > target_height:
-        x = x[:, :, :target_height, :]
-    elif H < target_height:
-        pad_h = target_height - H
-        x = F.pad(x, (0, 0, 0, pad_h))
+#     # Crop or pad height
+#     H, W = x.shape[2], x.shape[3]
+#     if H > target_height:
+#         x = x[:, :, :target_height, :]
+#     elif H < target_height:
+#         pad_h = target_height - H
+#         x = F.pad(x, (0, 0, 0, pad_h))
     
-    # Crop or pad width
-    if W > target_width:
-        x = x[:, :, :, :target_width]
-    elif W < target_width:
-        pad_w = target_width - W
-        x = F.pad(x, (0, pad_w, 0, 0))
+#     # Crop or pad width
+#     if W > target_width:
+#         x = x[:, :, :, :target_width]
+#     elif W < target_width:
+#         pad_w = target_width - W
+#         x = F.pad(x, (0, pad_w, 0, 0))
     
+#     return x
+
+def adjust_shape(x: torch.Tensor, target_size: tuple[int, int], pad_mode: str = 'hold') -> torch.Tensor:
+    """
+    Adjust a 4D tensor to (B, C, H_target, W_target) by cropping or padding.
+
+    Args:
+        x           -- input Tensor of shape (B, C, H, W)
+        target_size -- (H_target, W_target)
+        pad_mode    -- one of:
+                        'hold'    : repeat the last row/col
+                        'tail'    : replay the last d rows/cols as a block
+                        'reflect' : mirror the last d rows/cols
+    Returns:
+        Tensor of shape (B, C, H_target, W_target)
+    """
+    assert pad_mode in ('hold', 'tail', 'reflect'), f"unknown pad_mode {pad_mode}"
+    B, C, H, W = x.shape
+    H_t, W_t = target_size
+
+    # --- adjust height ---
+    if H > H_t:
+        x = x[:, :, :H_t, :]
+    elif H < H_t:
+        d = H_t - H
+        if pad_mode == 'hold':
+            pad = x[:, :, -1:, :].repeat(1, 1, d, 1)
+        elif pad_mode == 'tail':
+            pad = x[:, :, -d:, :]  # shape [B,C,d,W]
+        else:  # reflect
+            pad = x[:, :, -d:, :].flip(2)
+        x = torch.cat([x, pad], dim=2)
+
+    # --- adjust width ---
+    if W > W_t:
+        x = x[:, :, :, :W_t]
+    elif W < W_t:
+        d = W_t - W
+        if pad_mode == 'hold':
+            pad = x[:, :, :, -1:].repeat(1, 1, 1, d)
+        elif pad_mode == 'tail':
+            pad = x[:, :, :, -d:]  # shape [B,C,H,d]
+        else:  # reflect
+            pad = x[:, :, :, -d:].flip(3)
+        x = torch.cat([x, pad], dim=3)
+
     return x
+
 
