@@ -1,4 +1,4 @@
-# Autoencoder Examples
+# Autoencoder examples
 
 This directory contains a set of trained autoencoder experiments.  
 Each numbered folder corresponds to a row in **Table 1: Autoencoder Training Parameters with Accuracy** of the main report.
