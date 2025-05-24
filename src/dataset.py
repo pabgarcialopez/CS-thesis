@@ -1,7 +1,5 @@
 from src.utils.dataset import *
 from src.utils.audio_utils import *
-
-import torchaudio
 from torch.utils.data import Dataset
 
 class NSynth(Dataset):

@@ -42,32 +42,7 @@ def compute_convTranspose2D_output_size(input_size, kernel_size, stride, padding
     output_width = _compute_convTransposed2D_output_size(input_size[1], kernel_size[1], stride[1], padding[1])
     return (output_height, output_width)
 
-def compute_output_padding(expected_output_size, computed_output_size):
-    return (expected_output_size[0] - computed_output_size[0], expected_output_size[1] - computed_output_size[1])
-
-# def adjust_shape(x, target_size):
-
-#     target_height = target_size[0]
-#     target_width = target_size[1]
-
-#     # Crop or pad height
-#     H, W = x.shape[2], x.shape[3]
-#     if H > target_height:
-#         x = x[:, :, :target_height, :]
-#     elif H < target_height:
-#         pad_h = target_height - H
-#         x = F.pad(x, (0, 0, 0, pad_h))
-    
-#     # Crop or pad width
-#     if W > target_width:
-#         x = x[:, :, :, :target_width]
-#     elif W < target_width:
-#         pad_w = target_width - W
-#         x = F.pad(x, (0, pad_w, 0, 0))
-    
-#     return x
-
-def adjust_shape(x: torch.Tensor, target_size: tuple[int, int], pad_mode: str = 'hold') -> torch.Tensor:
+def adjust_shape(x, target_size, pad_mode='hold'):
     """
     Adjust a 4D tensor to (B, C, H_target, W_target) by cropping or padding.
 
@@ -82,6 +57,7 @@ def adjust_shape(x: torch.Tensor, target_size: tuple[int, int], pad_mode: str = 
         Tensor of shape (B, C, H_target, W_target)
     """
     assert pad_mode in ('hold', 'tail', 'reflect'), f"unknown pad_mode {pad_mode}"
+
     B, C, H, W = x.shape
     H_t, W_t = target_size
 
@@ -112,5 +88,3 @@ def adjust_shape(x: torch.Tensor, target_size: tuple[int, int], pad_mode: str = 
         x = torch.cat([x, pad], dim=3)
 
     return x
-
-

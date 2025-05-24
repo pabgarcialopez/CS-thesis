@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from config import DATA_PATH
 import torchaudio
 import torch
@@ -35,11 +34,6 @@ def load_json(partition):
         return json.load(f)
 
 def process_metadata(json_data):
-    """
-    Convert certain string fields to their corresponding integer IDs
-    for each entry in the entire JSON data. Also build the instrument -> instrument_str map.
-    """
-
     model_metadata = {}
     for key, metadata in json_data.items():
         instrument_family = metadata["instrument_family"]
@@ -48,11 +42,6 @@ def process_metadata(json_data):
 
     
     return model_metadata
-
-
-# ------------------------------------------------------------------------------
-# Load raw waveform (no transform applied)
-# ------------------------------------------------------------------------------
 
 def load_raw_waveform(partition, key):
     """

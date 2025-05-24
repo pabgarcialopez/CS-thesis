@@ -83,14 +83,14 @@ class Decoder(nn.Module):
                 output_padding=output_padding
             )
 
-            # Don't add RELU in last layer in the case of a Variational Decoder
+            # We don't add a ReLU in last layer in the case of a Variational Decoder
             if i < len(rev_sizes) - 1 or not variational:
                 block = nn.Sequential(deconv, nn.ReLU())
             else:
                 block = nn.Sequential(deconv)
 
             deconv_blocks.append(block)
-        self.decoder = nn.Sequential(*deconv_blocks)# , nn.Sigmoid())
+        self.decoder = nn.Sequential(*deconv_blocks) #, nn.Signmoid())
 
     def forward(self, x):
         x = self.fc(x)
@@ -139,8 +139,6 @@ class VAE(nn.Module):
         sizes = self.encoder.get_sizes()
         self.decoder = Decoder(sizes, latent_dim, self.channels, variational=True)  
 
-        print("Model:\n", self)
-
     def reparameterization(self, mean, log_var):
         std = torch.exp(0.5 * log_var)
         eps = self.normal.sample(mean.shape)
@@ -151,12 +149,7 @@ class VAE(nn.Module):
         kld = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=-1)
         return kld
 
-    def calculate_elbo(self, x, sigma=1.0):
-        """
-        Compute per-sample ELBO = log p(x|z) - KL[q(z|x) || p(z)]
-        where p(x|z) = Normal(decoder(z), sigma^2 I)
-        Returns tensor of shape (B,)
-        """
+    def calculate_ELBO_terms(self, x, sigma=1.0):
         B, C, H, W = x.shape
 
         # 1) Encode to get posterior parameters
@@ -166,26 +159,22 @@ class VAE(nn.Module):
         # 2) Sample z ~ q(z|x)
         z = self.reparameterization(mean, log_var)
 
-        # 3) Decode to reconstruction, with reflect padding
+        # 3) Decode to reconstruction
         x_hat = self.decoder(z)
         x_hat = adjust_shape(x_hat, (H, W), pad_mode='reflect')  # [B,C,H,W]
 
-        # 4) True Gaussian log-likelihood reconstruction term
-        #    p(x|z) = Normal(loc=x_hat, scale=sigma)
-        dist = Normal(loc=x_hat, scale=sigma)
-        #    log_prob per pixel, sum over C×H×W → (B,)
-        log_px_z = dist.log_prob(x).view(B, -1).sum(dim=1)
+        # 4) Reconstruction term
+        recon = - 1/(2*sigma**2) * F.mse_loss(x_hat, x, reduction='none').view(B, -1).sum(dim=1)
 
         # 5) KL divergence term
-        kld = self.compute_kld(mean, log_var)  # (B,)
+        kld = self.compute_kld(mean, log_var) # (B,)
 
-        return log_px_z, kld
+        return recon, kld
 
-    # y is the labels tensor
     def forward(self, x):
-        return self.calculate_elbo(x)
+        return self.calculate_ELBO_terms(x)
 
-    def loss_function(self, recon_term, kld, beta=1.0):
-        # We return -ELBO meaned, since we'retrying to maximize ELBO
-        return -(recon_term - beta * kld).mean()
+    def loss_function(self, recon, kld):
+        # We return -ELBO, since we'retrying to maximize ELBO
+        return (-recon + kld).mean()
 
