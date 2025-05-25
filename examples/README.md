@@ -1,1 +1,6 @@
-In this folder, several audio examples of each model can be found.
+# AE & VAE Examples
+
+This folder contains example outputs and visualizations from training:
+
+- **Autoencoder (AE)**
+- **Variational Autoencoder (VAE)**
