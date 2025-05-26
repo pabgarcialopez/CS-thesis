@@ -152,21 +152,21 @@ class VAE(nn.Module):
     def calculate_ELBO_terms(self, x, sigma=1.0):
         B, C, H, W = x.shape
 
-        # 1) Encode to get posterior parameters
+        # Encode to get posterior parameters
         _, mean, log_var = self.encoder(x)
         log_var = torch.clamp(log_var, min=-20, max=20)
 
-        # 2) Sample z ~ q(z|x)
+        # Sample z ~ q(z|x)
         z = self.reparameterization(mean, log_var)
 
-        # 3) Decode to reconstruction
+        # Decode to reconstruction
         x_hat = self.decoder(z)
         x_hat = adjust_shape(x_hat, (H, W), pad_mode='reflect')  # [B,C,H,W]
 
-        # 4) Reconstruction term
+        # Reconstruction term
         recon = - 1/(2*sigma**2) * F.mse_loss(x_hat, x, reduction='none').view(B, -1).sum(dim=1)
 
-        # 5) KL divergence term
+        # KL divergence term
         kld = self.compute_kld(mean, log_var) # (B,)
 
         return recon, kld
